@@ -1,6 +1,9 @@
+//docs.opencv.org/master/db/d00/samples_2cpp_2squares_8cpp-example.html#a20
+
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
+#include "opencv2/core.hpp"
 #include <iostream>
 
 using namespace std;
@@ -9,6 +12,15 @@ using namespace cv;
 Mat image, mask, bgdModel, fgdModel, result, resultGrey;
 int width, height;
 Rect rect;
+
+static double angle(Point pt1, Point pt2, Point pt0)
+{
+    double dx1 = pt1.x - pt0.x;
+    double dy1 = pt1.y - pt0.y;
+    double dx2 = pt2.x - pt0.x;
+    double dy2 = pt2.y - pt0.y;
+    return (dx1*dx2 + dy1*dy2)/sqrt((dx1*dx1 + dy1*dy1)*(dx2*dx2 + dy2*dy2) + 1e-10);
+}
 
 int
 main()
@@ -32,26 +44,51 @@ main()
     image.copyTo(result, mask);
 
     cvtColor( result, resultGrey, COLOR_BGR2GRAY );
-    blur( resultGrey, resultGrey, Size(5,5) );
 
-    int thresh = 200;
+    int thresh = 20;
     Mat canny_output;
     Canny( resultGrey, canny_output, thresh, thresh*2 );
 
     vector<vector<Point> > contours;
-     vector<vector<Point> > contours0;
-    vector<Vec4i> hierarchy;
-    findContours( canny_output, contours0, hierarchy, RETR_CCOMP, CHAIN_APPROX_SIMPLE);
+    vector<Point> approx;
+    vector<vector<Point> > squares;
 
-    contours.resize(contours0.size());
-    for( size_t k = 0; k < contours0.size(); k++ )
-        approxPolyDP(Mat(contours0[k]), contours[k], 3, true);
+
+    findContours( canny_output, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+
+
+    for(size_t i = 0; i < contours.size(); i++)
+    {
+        approxPolyDP(contours[i], approx, arcLength(contours[i], true)*0.02, true);
+
+        if( approx.size() == 4 &&
+            fabs(contourArea(approx)) > 1000 &&
+            isContourConvex(approx))
+        {
+            double maxCosine = 0;
+            for(int j = 2; j < 5; j++)
+            {
+                double cosine = fabs(angle(approx[j%4], approx[j-2], approx[j-1]));
+                maxCosine = MAX(maxCosine, cosine);
+            }
+
+            if(maxCosine < 0.3)
+                squares.push_back(approx);
+        }
+
+    }
+
+    for (int i = 0; i< squares.size(); i++)
+    {
+        cout << "squares " << i << endl;
+        cout << squares[i] << endl;
+    }
 
     Mat drawing = Mat::zeros( result.size(), CV_8UC3 );
-    for( size_t i = 0; i< contours.size(); i++ )
+    for( size_t i = 0; i < squares[0].size(); i++ )
     {
-        Scalar color = Scalar( 255, 0, 0 );
-        drawContours( drawing, contours0, (int)i, color, 2, LINE_8, hierarchy, 0 );
+        Scalar color = Scalar( 255, 255, 255 );
+        polylines(drawing, squares[0], true, color);
     }
     
     

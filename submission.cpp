@@ -1,5 +1,6 @@
 //docs.opencv.org/master/db/d00/samples_2cpp_2squares_8cpp-example.html#a20
 
+#include <opencv2/opencv.hpp>
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
@@ -51,8 +52,7 @@ main()
 
     vector<vector<Point> > contours;
     vector<Point> approx;
-    vector<vector<Point> > squares;
-
+    vector<vector<Point> > cornerPoints;
 
     findContours( canny_output, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
@@ -73,26 +73,53 @@ main()
             }
 
             if(maxCosine < 0.3)
-                squares.push_back(approx);
+                cornerPoints.push_back(approx);
         }
 
     }
 
-    for (int i = 0; i< squares.size(); i++)
+    //order points by y value
+    for(int i=0; i < cornerPoints[0].size()-1; i++)
     {
-        cout << "squares " << i << endl;
-        cout << squares[i] << endl;
+        Point temp = cornerPoints[0][i];
+        if(cornerPoints[0][i].y > cornerPoints[0][i+1].y)
+        {
+            cornerPoints[0][i] = cornerPoints[0][i+1];
+            cornerPoints[0][i+1] = temp;
+        }
     }
+    //order top points
+    if(cornerPoints[0][0].x > cornerPoints[0][1].x)
+    {
+        Point temp = cornerPoints[0][0];
+        cornerPoints[0][0] = cornerPoints[0][1];
+        cornerPoints[0][1] = temp;
+    }
+    //order bottom points
+        if(cornerPoints[0][3].x < cornerPoints[0][4].x)
+    {
+        Point temp = cornerPoints[0][3];
+        cornerPoints[0][3] = cornerPoints[0][4];
+        cornerPoints[0][3] = temp;
+    }
+    //create correctly sized document template given 500px width
+    Mat M(500, 647, CV_8U, Scalar(126, 0, 255));
+    vector<Point> D = { Point(0,0), Point(0, 500), Point(500, 647), Point(500, 0)};
+
+    Mat h = findHomography( cornerPoints[0], D, RANSAC);
+
+    warpPerspective(image, M, h, M.size());
+
+
 
     Mat drawing = Mat::zeros( result.size(), CV_8UC3 );
-    for( size_t i = 0; i < squares[0].size(); i++ )
+    for( size_t i = 0; i < cornerPoints[0].size(); i++ )
     {
-        Scalar color = Scalar( 255, 255, 255 );
-        polylines(drawing, squares[0], true, color);
+        Scalar color = Scalar( 255, 0, 255 );
+        polylines(image, cornerPoints[0], true, color);
     }
     
-    
-    imshow("result", drawing);
+    imshow("result", image);
     waitKey(0);
 
     return 0;
